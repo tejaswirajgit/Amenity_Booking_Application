@@ -39,9 +39,19 @@ venv/
 node_modules
 
 # Frontend generated artifacts
-Frontend_Adminside/.next/
-Frontend_Adminside/node_modules/
-Frontend_Adminside/tsconfig.tsbuildinfo
-Frontend_Userside/project/.next/
-Frontend_Userside/project/node_modules/
-Frontend_Userside/project/tsconfig.tsbuildinfo
+frontend/admin/.next/
+frontend/admin/node_modules/
+frontend/admin/tsconfig.tsbuildinfo
+frontend/admin/.turbo/
+frontend/user/.next/
+frontend/user/node_modules/
+frontend/user/tsconfig.tsbuildinfo
+frontend/user/.turbo/
+frontend/user/pnpm-lock.yaml
+*.tsbuildinfo
+
+# Build outputs
+.next/
+out/
+dist/
+build/
