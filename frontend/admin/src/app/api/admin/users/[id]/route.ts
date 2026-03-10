@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server';
 
 const defaultBackendBaseUrl = 'http://127.0.0.1:8000';
 
+function toProxyErrorResponse(error: unknown, action: 'update' | 'delete') {
+  const backendBaseUrl = getBackendBaseUrl();
+  const fallbackMessage = `Unable to ${action} user.`;
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  const isConnectivityError = message.toLowerCase().includes('fetch failed');
+
+  return NextResponse.json(
+    {
+      detail: isConnectivityError
+        ? `Admin frontend could not reach backend at ${backendBaseUrl}. Start the FastAPI server or update ADMIN_API_BASE_URL in frontend/admin/.env.local.`
+        : message,
+    },
+    { status: isConnectivityError ? 502 : 500 },
+  );
+}
+
 function getBackendBaseUrl() {
   return (process.env.ADMIN_API_BASE_URL?.trim() || defaultBackendBaseUrl).replace(/\/+$/, '');
 }
@@ -46,10 +62,7 @@ async function proxyRequest(method: 'PUT' | 'DELETE', request: Request, params: 
 
     return NextResponse.json(payload, { status: response.status });
   } catch (error) {
-    return NextResponse.json(
-      { detail: error instanceof Error ? error.message : `Unable to ${method === 'PUT' ? 'update' : 'delete'} user.` },
-      { status: 500 },
-    );
+    return toProxyErrorResponse(error, method === 'PUT' ? 'update' : 'delete');
   }
 }
 

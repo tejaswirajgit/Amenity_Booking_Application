@@ -10,6 +10,7 @@ from typing import Any, Literal, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -46,6 +47,8 @@ from db.auth import AuthenticatedSupabaseUser, get_current_supabase_user
 from db.session import SessionLocal, validate_db_compatibility
 from db.supabase_auth_middleware import SupabaseAuthMiddleware
 from db.supabase_client import get_supabase_service_client
+from routes.users import router as users_router
+from services.email_service import EmailServiceError, send_email
 
 settings = get_settings()
 
@@ -347,6 +350,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SupabaseAuthMiddleware)
+app.include_router(users_router)
 
 
 def _to_utc(dt: datetime, tz_name: str) -> datetime:
@@ -721,9 +725,9 @@ def admin_list_users():
 
 
 @app.post("/v1/admin/users", response_model=AdminUserCreateResponse, dependencies=[Depends(verify_admin_api_key)])
-def admin_create_user(request: AdminUserCreateRequest):
+async def admin_create_user(request: AdminUserCreateRequest):
     client = get_supabase_service_client()
-    temporary_password = "(set via email link)"
+    temporary_password = _generate_temporary_password()
 
     metadata_payload = {
         "resident_id": request.resident_id,
@@ -735,50 +739,65 @@ def admin_create_user(request: AdminUserCreateRequest):
     }
 
     try:
-        response = client.auth.admin.invite_user_by_email(
-            request.email,
-            options={"data": metadata_payload},
+        response = await run_in_threadpool(
+            client.auth.admin.create_user,
+            {
+                "email": request.email,
+                "password": temporary_password,
+                "email_confirm": True,
+                "user_metadata": metadata_payload,
+            },
         )
     except Exception as exc:
-        # When invite emails are not available (SMTP not configured, throttling, etc.),
-        # fall back to direct account creation with a temporary password.
-        temporary_password = _generate_temporary_password()
-        try:
-            response = client.auth.admin.create_user(
-                {
-                    "email": request.email,
-                    "password": temporary_password,
-                    "email_confirm": True,
-                    "user_metadata": metadata_payload,
-                }
-            )
-        except Exception as create_exc:
-            raise HTTPException(status_code=400, detail=f"Unable to invite or create user: invite_error={exc}; create_error={create_exc}") from create_exc
+        raise HTTPException(status_code=400, detail=f"Unable to create user: {exc}") from exc
 
     created_users = _extract_auth_user_records(response)
     if not created_users:
-        raise HTTPException(status_code=500, detail="Invite was sent, but the Supabase response did not include a user record.")
+        raise HTTPException(status_code=500, detail="User was created, but Supabase response did not include a user record.")
 
     created_user = created_users[0]
     auth_user_id = str(created_user.get("id", "")).strip()
     if not auth_user_id:
-        raise HTTPException(status_code=500, detail="Invite was sent, but the Supabase response did not include a valid user id.")
+        raise HTTPException(status_code=500, detail="User was created, but Supabase response did not include a valid user id.")
 
-    _persist_role_mapping(auth_user_id, request.role.value)
+    await run_in_threadpool(_persist_role_mapping, auth_user_id, request.role.value)
 
-    role_directory = _load_role_directory()
+    email_body = f"""
+    <html>
+      <body style=\"font-family: Arial, sans-serif; color: #1f2937;\">
+        <h2>Welcome to Amenity Booking</h2>
+        <p>Hello {request.name},</p>
+        <p>Your login account has been created by the admin.</p>
+        <p><strong>Email:</strong> {request.email}</p>
+        <p><strong>Temporary Password:</strong> {temporary_password}</p>
+        <p>Please log in and change your password immediately.</p>
+      </body>
+    </html>
+    """
+
+    try:
+        await send_email(
+            to_email=request.email,
+            subject="Your Amenity Booking Login Credentials",
+            html_body=email_body,
+        )
+    except EmailServiceError as exc:
+        # Avoid orphaned auth users when credential email fails.
+        try:
+            await run_in_threadpool(client.auth.admin.delete_user, auth_user_id)
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"User created but credential email failed: {exc}") from exc
+
+    role_directory = await run_in_threadpool(_load_role_directory)
     user_item = _build_admin_user_item(created_user, role_directory)
     if user_item is None:
         raise HTTPException(status_code=500, detail="Unable to build the created user response.")
 
     return AdminUserCreateResponse(
         success=True,
-        message=(
-            "Invitation email sent. The user will receive a link to set their password."
-            if temporary_password == "(set via email link)"
-            else "Invite email was throttled by Supabase. User was created with a temporary password."
-        ),
-        temporary_password=temporary_password,
+        message="User created. Temporary password sent to user email.",
+        temporary_password="(sent to user email)",
         user=user_item,
     )
 
