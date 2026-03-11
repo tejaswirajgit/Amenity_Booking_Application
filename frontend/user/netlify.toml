@@ -1,7 +1,6 @@
 [build]
   base = "frontend/user"
-  command = "npm install && npm run build"
-  publish = ".next"
+  command = "npm run build"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
@@ -14,7 +13,3 @@
 
 # Update NEXT_PUBLIC_ADMIN_APP_URL above with your actual admin app deployment URL
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

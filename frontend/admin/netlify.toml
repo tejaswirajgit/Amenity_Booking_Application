@@ -1,7 +1,6 @@
 [build]
   base = "frontend/admin"
-  command = "npm install && npm run build"
-  publish = ".next"
+  command = "npm run build"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
@@ -15,7 +14,3 @@
 # ADMIN_API_KEY should match your backend API key
 # ADMIN_API_BASE_URL should be your deployed backend URL
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
