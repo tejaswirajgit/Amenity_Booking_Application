@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const defaultBackendBaseUrl = 'http://127.0.0.1:8000';
 
@@ -26,7 +26,11 @@ function getAdminApiKey() {
   return process.env.ADMIN_API_KEY?.trim() || '';
 }
 
-async function proxyRequest(method: 'PUT' | 'DELETE', request: Request, params: { id: string }) {
+async function proxyRequest(
+  method: 'PUT' | 'DELETE',
+  request: NextRequest,
+  params: Promise<{ id: string }>,
+) {
   try {
     const adminApiKey = getAdminApiKey();
     if (!adminApiKey) {
@@ -36,7 +40,7 @@ async function proxyRequest(method: 'PUT' | 'DELETE', request: Request, params: 
       );
     }
 
-    const resolvedParams = await Promise.resolve(params as { id?: string });
+    const resolvedParams = await params;
     const userId = (resolvedParams?.id || '').trim();
     if (!userId || userId === 'undefined') {
       return NextResponse.json({ detail: 'Invalid user id in request path.' }, { status: 400 });
@@ -66,10 +70,10 @@ async function proxyRequest(method: 'PUT' | 'DELETE', request: Request, params: 
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return proxyRequest('PUT', request, params);
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return proxyRequest('DELETE', request, params);
 }
