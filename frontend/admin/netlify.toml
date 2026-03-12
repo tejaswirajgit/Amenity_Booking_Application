@@ -10,6 +10,7 @@
   NODE_VERSION = "20"
   NEXT_PUBLIC_SUPABASE_URL = "https://vobavbcusbhsluovxwfw.supabase.co"
   NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvYmF2YmN1c2Joc2x1b3Z4d2Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDk3NjIsImV4cCI6MjA4NzQyNTc2Mn0.c6M33cE178lviDuPweyJwHYrAGs76Abhn1IsE8ug30U"
+  NEXT_PUBLIC_ADMIN_APP_URL = "https://amenity-admin.netlify.app"
   ADMIN_API_BASE_URL = "https://amenity-api.onrender.com"
 
 # Note: Set ADMIN_API_KEY and ADMIN_API_BASE_URL in Netlify UI under Site settings > Environment variables
